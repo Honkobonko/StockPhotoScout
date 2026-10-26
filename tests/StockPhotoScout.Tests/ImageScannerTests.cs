@@ -85,8 +85,7 @@ public sealed class ImageScannerTests
         var photo = Assert.Single(results);
 
         Assert.Equal(filePath, photo.FilePath);
-        Assert.Equal("photo.jpg", photo.FileName);
-        Assert.Equal(0, photo.TechnicalQuality);
+        Assert.Equal("photo.jpg", photo.FileName);  
         Assert.Equal(0, photo.StockPotential);
         Assert.Equal("Identifiability Unclear", photo.PeopleStatus);
         Assert.Equal("Unclear", photo.ReleaseStatus);

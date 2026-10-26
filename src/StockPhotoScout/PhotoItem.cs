@@ -1,3 +1,4 @@
+
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
@@ -10,43 +11,63 @@ public class PhotoItem : INotifyPropertyChanged
     public string FileName { get; set; } = "";
     public BitmapImage? Thumbnail { get; set; }
 
-    private int _technicalQuality;
-    public int TechnicalQuality
-    {
-        get => _technicalQuality;
-        set { _technicalQuality = value; OnPropertyChanged(); }
-    }
-
     private int _stockPotential;
     public int StockPotential
     {
         get => _stockPotential;
-        set { _stockPotential = value; OnPropertyChanged(); }
+        set
+        {
+            if (_stockPotential == value)
+                return;
+
+            _stockPotential = value;
+            OnPropertyChanged();
+        }
     }
 
     private string _peopleStatus = "Noch nicht analysiert";
     public string PeopleStatus
     {
         get => _peopleStatus;
-        set { _peopleStatus = value; OnPropertyChanged(); }
+        set
+        {
+            if (_peopleStatus == value)
+                return;
+
+            _peopleStatus = value;
+            OnPropertyChanged();
+        }
     }
 
     private string _releaseStatus = "Unklar";
     public string ReleaseStatus
     {
         get => _releaseStatus;
-        set { _releaseStatus = value; OnPropertyChanged(); }
+        set
+        {
+            if (_releaseStatus == value)
+                return;
+
+            _releaseStatus = value;
+            OnPropertyChanged();
+        }
     }
 
     private string _recommendation = "Noch nicht analysiert";
     public string Recommendation
     {
         get => _recommendation;
-        set { _recommendation = value; OnPropertyChanged(); }
+        set
+        {
+            if (_recommendation == value)
+                return;
+
+            _recommendation = value;
+            OnPropertyChanged();
+        }
     }
 
     private bool _isSelected;
-
     public bool IsSelected
     {
         get => _isSelected;
@@ -56,7 +77,7 @@ public class PhotoItem : INotifyPropertyChanged
                 return;
 
             _isSelected = value;
-            OnPropertyChanged(nameof(IsSelected));
+            OnPropertyChanged();
         }
     }
 

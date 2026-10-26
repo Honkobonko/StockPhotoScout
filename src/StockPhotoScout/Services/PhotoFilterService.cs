@@ -13,9 +13,6 @@ public sealed class PhotoFilterService
         if (!MatchesReleaseStatus(photo, options))
             return false;
 
-        if (photo.TechnicalQuality < ReadScore(options.MinimumTechnicalQuality))
-            return false;
-
         if (photo.StockPotential < ReadScore(options.MinimumStockPotential))
             return false;
 
@@ -127,7 +124,6 @@ public sealed class PhotoFilterOptions
     public bool ShowReleaseAvailable { get; init; }
     public bool ShowReleaseUnclear { get; init; }
 
-    public string? MinimumTechnicalQuality { get; init; }
     public string? MinimumStockPotential { get; init; }
 
     public bool EditorialOnly { get; init; }

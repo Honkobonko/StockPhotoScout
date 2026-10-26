@@ -39,7 +39,6 @@ public sealed class ImageScanner
                 FileName = Path.GetFileName(filePath),
                 Thumbnail = thumbnail,
 
-                TechnicalQuality = 0,
                 StockPotential = 0,
 
                 PeopleStatus = "Identifiability Unclear",

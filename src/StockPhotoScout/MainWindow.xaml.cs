@@ -185,8 +185,7 @@ public partial class MainWindow : Window
             ShowReleaseNeedsReview = ReleaseCheckCheck.IsChecked == true,
             ShowReleaseAvailable = ReleasePresentCheck.IsChecked == true,
             ShowReleaseUnclear = ReleaseUnclearCheck.IsChecked == true,
-
-            MinimumTechnicalQuality = MinTechnicalBox.Text,
+       
             MinimumStockPotential = MinStockBox.Text,          
         };
 
@@ -231,7 +230,6 @@ public partial class MainWindow : Window
         ReleasePresentCheck.IsChecked = true;
         ReleaseUnclearCheck.IsChecked = true;
 
-        MinTechnicalBox.Text = "0";
         MinStockBox.Text = "0";
         
         RefreshFilters();

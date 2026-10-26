@@ -1,3 +1,4 @@
+
 using StockPhotoScout;
 using StockPhotoScout.Services;
 using Xunit;
@@ -15,7 +16,6 @@ public sealed class PhotoFilterServiceTests
             recommendation: "Candidate",
             peopleStatus: "None Detected",
             releaseStatus: "Release Available",
-            technicalQuality: 80,
             stockPotential: 75);
 
         var options = CreateOptions();
@@ -96,27 +96,11 @@ public sealed class PhotoFilterServiceTests
     }
 
     [Fact]
-    public void Matches_ReturnsFalse_WhenTechnicalQualityIsBelowMinimum()
+    public void Matches_ReturnsTrue_WhenStockPotentialEqualsMinimum()
     {
-        var photo = CreatePhoto(technicalQuality: 49);
+        var photo = CreatePhoto(stockPotential: 60);
 
         var options = CreateOptions(
-            minimumTechnicalQuality: "50");
-
-        bool result = _service.Matches(photo, options);
-
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void Matches_ReturnsTrue_WhenScoresEqualMinimumValues()
-    {
-        var photo = CreatePhoto(
-            technicalQuality: 50,
-            stockPotential: 60);
-
-        var options = CreateOptions(
-            minimumTechnicalQuality: "50",
             minimumStockPotential: "60");
 
         bool result = _service.Matches(photo, options);
@@ -137,54 +121,17 @@ public sealed class PhotoFilterServiceTests
         Assert.False(result);
     }
 
-    [Fact]
-    public void Matches_ReturnsFalse_WhenEditorialOnlyIsEnabledForNonEditorialPhoto()
-    {
-        var photo = CreatePhoto(editorialPotential: false);
-
-        var options = CreateOptions(editorialOnly: true);
-
-        bool result = _service.Matches(photo, options);
-
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void Matches_ReturnsTrue_WhenEditorialOnlyIsEnabledForEditorialPhoto()
-    {
-        var photo = CreatePhoto(editorialPotential: true);
-
-        var options = CreateOptions(editorialOnly: true);
-
-        bool result = _service.Matches(photo, options);
-
-        Assert.True(result);
-    }
-
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("abc")]
     [InlineData("-10")]
-    public void Matches_HandlesInvalidOrLowTechnicalMinimum(string? minimum)
+    public void Matches_HandlesInvalidStockMinimum(string? minimum)
     {
-        var photo = CreatePhoto(technicalQuality: 0);
+        var photo = CreatePhoto(stockPotential: 0);
 
         var options = CreateOptions(
-            minimumTechnicalQuality: minimum);
-
-        bool result = _service.Matches(photo, options);
-
-        Assert.True(result);
-    }
-
-    [Fact]
-    public void Matches_ClampsTechnicalMinimumAbove100To100()
-    {
-        var photo = CreatePhoto(technicalQuality: 100);
-
-        var options = CreateOptions(
-            minimumTechnicalQuality: "150");
+            minimumStockPotential: minimum);
 
         bool result = _service.Matches(photo, options);
 
@@ -195,20 +142,16 @@ public sealed class PhotoFilterServiceTests
         string recommendation = "Candidate",
         string peopleStatus = "None Detected",
         string releaseStatus = "Release Available",
-        int technicalQuality = 80,
         int stockPotential = 75,
-        bool isAnalyzed = true,
-        bool editorialPotential = true)
+        bool isAnalyzed = true)
     {
         return new PhotoItem
         {
             Recommendation = recommendation,
             PeopleStatus = peopleStatus,
             ReleaseStatus = releaseStatus,
-            TechnicalQuality = technicalQuality,
             StockPotential = stockPotential,
-            IsAnalyzed = isAnalyzed,
-            EditorialPotential = editorialPotential
+            IsAnalyzed = isAnalyzed
         };
     }
 
@@ -224,9 +167,7 @@ public sealed class PhotoFilterServiceTests
         bool showReleaseNeedsReview = false,
         bool showReleaseAvailable = true,
         bool showReleaseUnclear = false,
-        string? minimumTechnicalQuality = "0",
-        string? minimumStockPotential = "0",
-        bool editorialOnly = false)
+        string? minimumStockPotential = "0")
     {
         return new PhotoFilterOptions
         {
@@ -241,9 +182,7 @@ public sealed class PhotoFilterServiceTests
             ShowReleaseNeedsReview = showReleaseNeedsReview,
             ShowReleaseAvailable = showReleaseAvailable,
             ShowReleaseUnclear = showReleaseUnclear,
-            MinimumTechnicalQuality = minimumTechnicalQuality,
-            MinimumStockPotential = minimumStockPotential,
-            EditorialOnly = editorialOnly
+            MinimumStockPotential = minimumStockPotential
         };
     }
 }

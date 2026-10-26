@@ -223,16 +223,7 @@
 
                     <Separator Margin="0,6,0,8"/>
 
-                    <WrapPanel>
-                        <StackPanel Margin="4,0,20,4">
-                            <TextBlock Text="Minimum Technical Quality (0–100)"/>
-
-                            <TextBox x:Name="MinTechnicalBox"
-                                     Text="0"
-                                     Width="100"
-                                     TextChanged="ScoreFilter_Changed"/>
-                        </StackPanel>
-
+                    <WrapPanel> 
                         <StackPanel Margin="4,0,20,4">
                             <TextBlock Text="Minimum Stock Potential (0–100)"/>
 
@@ -307,12 +298,7 @@
                                         Binding="{Binding FileName}"
                                         Width="2*"
                                         IsReadOnly="True"/>
-
-                    <DataGridTextColumn Header="Technical Quality"
-                                        Binding="{Binding TechnicalQuality, StringFormat={}{0}/100}"
-                                        Width="105"
-                                        IsReadOnly="True"/>
-
+                                        
                     <DataGridTextColumn Header="Stock Potential"
                                         Binding="{Binding StockPotential, StringFormat={}{0}/100}"
                                         Width="100"
