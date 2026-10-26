@@ -1,18 +1,23 @@
 ﻿using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
+using StockPhotoScout.Services;
 
 namespace StockPhotoScout;
 
 public partial class MainWindow : Window
 {
     private readonly ObservableCollection<PhotoItem> _photos = new();
-    private ICollectionView _photosView = null!;
+
+    private readonly ImageCopyService _imageCopyService = new();
+    private readonly ImageScanner _imageScanner = new();
+    private readonly PhotoFilterService _photoFilterService = new();
+
+    private System.ComponentModel.ICollectionView _photosView = null!;
 
     private string _sourceFolder = string.Empty;
     private string _destinationFolder = string.Empty;
@@ -25,6 +30,7 @@ public partial class MainWindow : Window
         _photosView.Filter = PhotoMatchesFilters;
 
         ResultsGrid.ItemsSource = _photosView;
+
         UpdateCount();
     }
 
@@ -59,8 +65,8 @@ public partial class MainWindow : Window
     }
 
     private void SelectAllFiltered_Click(
-    object sender,
-    RoutedEventArgs e)
+        object sender,
+        RoutedEventArgs e)
     {
         foreach (PhotoItem photo in _photosView)
         {
@@ -81,7 +87,7 @@ public partial class MainWindow : Window
 
         UpdateCount();
     }
-    
+
     private async void Scan_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_sourceFolder) ||
@@ -109,61 +115,15 @@ public partial class MainWindow : Window
         try
         {
             CountText.Text = "Scanning images...";
+
             PreviewImage.Source = null;
             PreviewFileText.Text = "No image selected";
 
             _photos.Clear();
             RefreshFilters();
 
-            // Search for files and load thumbnails in the background.
-            List<PhotoItem> scannedPhotos = await Task.Run(() =>
-            {
-                var results = new List<PhotoItem>();
-
-                var imageFiles = Directory
-                    .EnumerateFiles(
-                        _sourceFolder,
-                        "*.*",
-                        SearchOption.AllDirectories)
-                    .Where(IsSupportedImage)
-                    .OrderBy(
-                        path => path,
-                        StringComparer.OrdinalIgnoreCase);
-
-                foreach (string filePath in imageFiles)
-                {
-                    BitmapImage? thumbnail = null;
-
-                    // A damaged image must not stop the entire scan.
-                    try
-                    {
-                        thumbnail = LoadBitmap(filePath, 180);
-                    }
-                    catch (Exception)
-                    {
-                        // Keep the file in the results without a thumbnail.
-                    }
-
-                    results.Add(new PhotoItem
-                    {
-                        FilePath = filePath,
-                        FileName = Path.GetFileName(filePath),
-                        Thumbnail = thumbnail,
-
-                        TechnicalQuality = 0,
-                        StockPotential = 0,
-
-                        PeopleStatus = "Identifiability Unclear",
-                        ReleaseStatus = "Unclear",
-                        Recommendation = "Not Analyzed Yet",
-
-                        IsAnalyzed = false,
-                        HasPeople = false
-                    });
-                }
-
-                return results;
-            });
+            List<PhotoItem> scannedPhotos = await Task.Run(
+                () => _imageScanner.ScanFolder(_sourceFolder));
 
             // Update the WPF-bound collection on the UI thread.
             foreach (PhotoItem photo in scannedPhotos)
@@ -205,106 +165,32 @@ public partial class MainWindow : Window
         }
     }
 
-
-    private static bool IsSupportedImage(string filePath)
-    {
-        string extension = Path.GetExtension(filePath);
-
-        return extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase);
-    }
-
     private bool PhotoMatchesFilters(object item)
     {
         if (item is not PhotoItem photo)
             return false;
 
-        bool recommendationSelected =
-            IsChecked(RecCandidateCheck) ||
-            IsChecked(RecReviewCheck) ||
-            IsChecked(RecUnsuitableCheck) ||
-            IsChecked(RecNotAnalyzedCheck);
+        var options = new PhotoFilterOptions
+        {
+            ShowCandidates = RecCandidateCheck.IsChecked == true,
+            ShowManualReview = RecReviewCheck.IsChecked == true,
+            ShowUnsuitable = RecUnsuitableCheck.IsChecked == true,
+            ShowNotAnalyzed = RecNotAnalyzedCheck.IsChecked == true,
 
-        if (!recommendationSelected)
-            return false;
+            ShowNoPeople = PeopleNoneCheck.IsChecked == true,
+            ShowPeopleDetected = PeopleDetectedCheck.IsChecked == true,
+            ShowPeopleUnclear = PeopleUnclearCheck.IsChecked == true,
 
-        bool recommendationMatches =
-            (IsChecked(RecCandidateCheck) &&
-             photo.Recommendation == "Candidate") ||
-            (IsChecked(RecReviewCheck) &&
-             photo.Recommendation == "Manual Review") ||
-            (IsChecked(RecUnsuitableCheck) &&
-             photo.Recommendation == "Likely Unsuitable") ||
-            (IsChecked(RecNotAnalyzedCheck) &&
-             !photo.IsAnalyzed);
+            ShowReleaseNotRequired = ReleaseNotRequiredCheck.IsChecked == true,
+            ShowReleaseNeedsReview = ReleaseCheckCheck.IsChecked == true,
+            ShowReleaseAvailable = ReleasePresentCheck.IsChecked == true,
+            ShowReleaseUnclear = ReleaseUnclearCheck.IsChecked == true,
 
-        if (!recommendationMatches)
-            return false;
+            MinimumTechnicalQuality = MinTechnicalBox.Text,
+            MinimumStockPotential = MinStockBox.Text,          
+        };
 
-        bool peopleSelected =
-            IsChecked(PeopleNoneCheck) ||
-            IsChecked(PeopleDetectedCheck) ||
-            IsChecked(PeopleUnclearCheck);
-
-        if (!peopleSelected)
-            return false;
-
-        bool peopleMatches =
-            (IsChecked(PeopleNoneCheck) &&
-             photo.PeopleStatus == "None Detected") ||
-            (IsChecked(PeopleDetectedCheck) &&
-             photo.PeopleStatus == "People Detected") ||
-            (IsChecked(PeopleUnclearCheck) &&
-             photo.PeopleStatus == "Identifiability Unclear");
-
-        if (!peopleMatches)
-            return false;
-
-        bool releaseSelected =
-            IsChecked(ReleaseNotRequiredCheck) ||
-            IsChecked(ReleaseCheckCheck) ||
-            IsChecked(ReleasePresentCheck) ||
-            IsChecked(ReleaseUnclearCheck);
-
-        if (!releaseSelected)
-            return false;
-
-        bool releaseMatches =
-            (IsChecked(ReleaseNotRequiredCheck) &&
-             photo.ReleaseStatus == "Not Required (Provisional)") ||
-            (IsChecked(ReleaseCheckCheck) &&
-             photo.ReleaseStatus == "Release Needs Review") ||
-            (IsChecked(ReleasePresentCheck) &&
-             photo.ReleaseStatus == "Release Available") ||
-            (IsChecked(ReleaseUnclearCheck) &&
-             photo.ReleaseStatus == "Unclear");
-
-        if (!releaseMatches)
-            return false;
-
-        int minimumTechnicalQuality = ReadScore(MinTechnicalBox.Text);
-        int minimumStockPotential = ReadScore(MinStockBox.Text);
-
-        if (photo.TechnicalQuality < minimumTechnicalQuality)
-            return false;
-
-        if (photo.StockPotential < minimumStockPotential)
-            return false;       
-
-        return true;
-    }
-
-    private static bool IsChecked(CheckBox checkBox)
-    {
-        return checkBox.IsChecked == true;
-    }
-
-    private static int ReadScore(string? text)
-    {
-        if (!int.TryParse(text, out int score))
-            return 0;
-
-        return Math.Clamp(score, 0, 100);
+        return _photoFilterService.Matches(photo, options);
     }
 
     private void Filter_Changed(object sender, RoutedEventArgs e)
@@ -347,7 +233,7 @@ public partial class MainWindow : Window
 
         MinTechnicalBox.Text = "0";
         MinStockBox.Text = "0";
-
+        
         RefreshFilters();
     }
 
@@ -420,7 +306,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var selectedPhotos = _photos
+        List<PhotoItem> selectedPhotos = _photos
             .Where(photo => photo.IsSelected)
             .ToList();
 
@@ -434,46 +320,26 @@ public partial class MainWindow : Window
             return;
         }
 
-        int copiedCount = 0;
-        int failedCount = 0;
-
         try
         {
-            foreach (PhotoItem photo in selectedPhotos)
-            {
-                try
-                {
-                    string targetPath = GetUniqueDestinationPath(
-                        _destinationFolder,
-                        photo.FileName);
-
-                    File.Copy(
-                        photo.FilePath,
-                        targetPath,
-                        overwrite: false);
-
-                    copiedCount++;
-                }
-                catch
-                {
-                    failedCount++;
-                }
-            }
+            CopyResult result = _imageCopyService.CopyFiles(
+                selectedPhotos,
+                _destinationFolder);
 
             string resultMessage =
-                $"Copied {copiedCount} image(s) to the destination folder.";
+                $"Copied {result.CopiedCount} image(s) to the destination folder.";
 
-            if (failedCount > 0)
+            if (result.FailedCount > 0)
             {
                 resultMessage +=
-                    $"{Environment.NewLine}{failedCount} image(s) could not be copied.";
+                    $"{Environment.NewLine}{result.FailedCount} image(s) could not be copied.";
             }
 
             MessageBox.Show(
                 resultMessage,
                 "Copy Complete",
                 MessageBoxButton.OK,
-                failedCount > 0
+                result.FailedCount > 0
                     ? MessageBoxImage.Warning
                     : MessageBoxImage.Information);
         }
@@ -487,42 +353,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private static string GetUniqueDestinationPath(
-        string destinationFolder,
-        string fileName)
-    {
-        string targetPath = Path.Combine(destinationFolder, fileName);
-
-        if (!File.Exists(targetPath))
-            return targetPath;
-
-        string nameWithoutExtension = Path.GetFileNameWithoutExtension(fileName);
-        string extension = Path.GetExtension(fileName);
-
-        int index = 2;
-
-        do
-        {
-            string newFileName =
-                $"{nameWithoutExtension}_{index}{extension}";
-
-            targetPath = Path.Combine(destinationFolder, newFileName);
-            index++;
-        }
-        while (File.Exists(targetPath));
-
-        return targetPath;
-    }
-
     private static bool IsSameOrChildPath(
         string candidatePath,
         string parentPath)
     {
         string normalizedCandidate = Path.GetFullPath(candidatePath)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            .TrimEnd(
+                Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar);
 
         string normalizedParent = Path.GetFullPath(parentPath)
-            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            .TrimEnd(
+                Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar);
 
         if (string.Equals(
             normalizedCandidate,
@@ -532,8 +375,7 @@ public partial class MainWindow : Window
             return true;
         }
 
-        string parentPrefix =
-            normalizedParent + Path.DirectorySeparatorChar;
+        string parentPrefix = normalizedParent + Path.DirectorySeparatorChar;
 
         return normalizedCandidate.StartsWith(
             parentPrefix,
@@ -569,7 +411,6 @@ public partial class MainWindow : Window
 
         int visibleCount = _photosView.Cast<object>().Count();
 
-        CountText.Text =
-            $"{visibleCount} of {_photos.Count} images shown";
+        CountText.Text = $"{visibleCount} of {_photos.Count} images shown";
     }
 }
