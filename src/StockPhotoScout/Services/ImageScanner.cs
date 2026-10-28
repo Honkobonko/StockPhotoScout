@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows.Media.Imaging;
+using StockPhotoScout.Models;
 
 namespace StockPhotoScout.Services;
 

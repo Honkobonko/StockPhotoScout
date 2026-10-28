@@ -1,10 +1,16 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
+using StockPhotoScout.Models;
 using StockPhotoScout.Services;
 
 namespace StockPhotoScout;
@@ -17,6 +23,15 @@ public partial class MainWindow : Window
     private readonly ImageScanner _imageScanner = new();
     private readonly PhotoFilterService _photoFilterService = new();
 
+    private readonly HttpClient _httpClient = new()
+    {
+        BaseAddress = new Uri("http://localhost:11434"),
+        Timeout = TimeSpan.FromMinutes(5)
+    };
+
+    private readonly OllamaClient _ollamaClient;
+    private readonly PhotoAnalysisService _photoAnalysisService;
+
     private System.ComponentModel.ICollectionView _photosView = null!;
 
     private string _sourceFolder = string.Empty;
@@ -25,6 +40,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        _ollamaClient = new OllamaClient(_httpClient);
+        _photoAnalysisService = new PhotoAnalysisService(_ollamaClient);
 
         _photosView = CollectionViewSource.GetDefaultView(_photos);
         _photosView.Filter = PhotoMatchesFilters;
@@ -125,7 +143,6 @@ public partial class MainWindow : Window
             List<PhotoItem> scannedPhotos = await Task.Run(
                 () => _imageScanner.ScanFolder(_sourceFolder));
 
-            // Update the WPF-bound collection on the UI thread.
             foreach (PhotoItem photo in scannedPhotos)
             {
                 _photos.Add(photo);
@@ -165,6 +182,103 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void AnalyzeSelected_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        List<PhotoItem> selectedPhotos = _photos
+            .Where(photo => photo.IsSelected && !photo.IsAnalyzed)
+            .ToList();
+
+        if (selectedPhotos.Count == 0)
+        {
+            MessageBox.Show(
+                "Please select at least one unanalyzed image.",
+                "No Images to Analyze",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            CountText.Text = "Checking Ollama...";
+
+            bool isReady = await _photoAnalysisService.IsReadyAsync();
+
+            if (!isReady)
+            {
+                MessageBox.Show(
+                    "Ollama is unavailable or qwen2.5vl:7b is not installed.",
+                    "Ollama Not Ready",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            int completed = 0;
+            int failed = 0;
+            var errors = new List<string>();
+
+            foreach (PhotoItem photo in selectedPhotos)
+            {
+                CountText.Text =
+                    $"Analyzing {completed + failed + 1} of " +
+                    $"{selectedPhotos.Count}: {photo.FileName}";
+
+                try
+                {
+                    await _photoAnalysisService.AnalyzePhotoAsync(photo);
+                    completed++;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    errors.Add($"{photo.FileName}: {ex.Message}");
+                }
+            }
+
+            RefreshFilters();
+
+            string message =
+                $"Analysis complete.{Environment.NewLine}" +
+                $"Successful: {completed}{Environment.NewLine}" +
+                $"Failed: {failed}";
+
+            if (errors.Count > 0)
+            {
+                message += Environment.NewLine + Environment.NewLine +
+                           string.Join(
+                               Environment.NewLine,
+                               errors.Take(5));
+
+                if (errors.Count > 5)
+                    message += Environment.NewLine + "...";
+            }
+
+            MessageBox.Show(
+                message,
+                "Analysis Complete",
+                MessageBoxButton.OK,
+                failed > 0
+                    ? MessageBoxImage.Warning
+                    : MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"The analysis could not be started:" +
+                $"{Environment.NewLine}{ex.Message}",
+                "Analysis Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+        finally
+        {
+            UpdateCount();
+        }
+    }
+
     private bool PhotoMatchesFilters(object item)
     {
         if (item is not PhotoItem photo)
@@ -185,8 +299,8 @@ public partial class MainWindow : Window
             ShowReleaseNeedsReview = ReleaseCheckCheck.IsChecked == true,
             ShowReleaseAvailable = ReleasePresentCheck.IsChecked == true,
             ShowReleaseUnclear = ReleaseUnclearCheck.IsChecked == true,
-       
-            MinimumStockPotential = MinStockBox.Text,          
+
+            MinimumStockPotential = MinStockBox.Text
         };
 
         return _photoFilterService.Matches(photo, options);
@@ -231,7 +345,7 @@ public partial class MainWindow : Window
         ReleaseUnclearCheck.IsChecked = true;
 
         MinStockBox.Text = "0";
-        
+
         RefreshFilters();
     }
 

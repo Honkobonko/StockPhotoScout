@@ -1,4 +1,5 @@
 using System.IO;
+using StockPhotoScout.Models;
 
 namespace StockPhotoScout.Services;
 

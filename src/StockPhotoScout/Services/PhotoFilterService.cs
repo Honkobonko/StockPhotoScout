@@ -1,3 +1,5 @@
+using StockPhotoScout.Models;
+
 namespace StockPhotoScout.Services;
 
 public sealed class PhotoFilterService
@@ -14,10 +16,7 @@ public sealed class PhotoFilterService
             return false;
 
         if (photo.StockPotential < ReadScore(options.MinimumStockPotential))
-            return false;
-
-        if (options.EditorialOnly && !photo.EditorialPotential)
-            return false;
+            return false; 
 
         return true;
     }

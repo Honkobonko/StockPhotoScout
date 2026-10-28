@@ -1,4 +1,5 @@
 using StockPhotoScout.Services;
+using StockPhotoScout.Models;
 using Xunit;
 
 namespace StockPhotoScout.Tests;

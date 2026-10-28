@@ -1,9 +1,8 @@
-
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
 
-namespace StockPhotoScout;
+namespace StockPhotoScout.Models;
 
 public class PhotoItem : INotifyPropertyChanged
 {
@@ -67,6 +66,20 @@ public class PhotoItem : INotifyPropertyChanged
         }
     }
 
+    private string _explanation = "";
+    public string Explanation
+    {
+        get => _explanation;
+        set
+        {
+            if (_explanation == value)
+                return;
+
+            _explanation = value;
+            OnPropertyChanged();
+        }
+    }
+
     private bool _isSelected;
     public bool IsSelected
     {
@@ -81,9 +94,21 @@ public class PhotoItem : INotifyPropertyChanged
         }
     }
 
-    public bool IsAnalyzed { get; set; }
+    private bool _isAnalyzed;
+    public bool IsAnalyzed
+    {
+        get => _isAnalyzed;
+        set
+        {
+            if (_isAnalyzed == value)
+                return;
+
+            _isAnalyzed = value;
+            OnPropertyChanged();
+        }
+    }
+
     public bool HasPeople { get; set; }
-    public bool EditorialPotential { get; set; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
