@@ -1,8 +1,9 @@
 Analyze this photograph for potential commercial stock photography use.
+
 Return only a valid JSON object with exactly these properties:
 
 {
-  "stockPotential": 0,
+  "stockPotential": 1,
   "peopleStatus": "None Detected",
   "releaseStatus": "Unclear",
   "recommendation": "Manual Review",
@@ -10,23 +11,17 @@ Return only a valid JSON object with exactly these properties:
 }
 
 Rules:
-- stockPotential: integer from 0 to 100.
+- stockPotential: integer from 0 to 10. Rate commercial stock potential based on appeal, usefulness, composition, lighting, sharpness, and subject relevance.
 - peopleStatus must be one of:
   "None Detected", "People Detected", "Identifiability Unclear".
 - releaseStatus must be one of:
-  "Not Required (Provisional)", "Release Needs Review",
-  "Release Available", "Unclear".
-- Never claim that a signed model or property release exists.
-  You cannot inspect documents or verify signed releases.
-- Use "Not Required (Provisional)" only when no relevant release
-  appears necessary based on the visible content.
-- Use "Release Needs Review" when identifiable people or potentially
-  protected property, artwork, logos, or trademarks may require review.
+  "Not Required (Provisional)", "Release Needs Review", "Unclear".
+- Never claim that a signed model or property release exists. You cannot inspect documents or verify signed releases.
+- Use "Not Required (Provisional)" only when no relevant release appears necessary based on the visible content.
+- Use "Release Needs Review" when identifiable people or potentially protected property, artwork, logos, or trademarks may require review.
 - Use "Unclear" whenever the release situation cannot be assessed.
 - recommendation must be one of:
   "Candidate", "Manual Review", "Likely Unsuitable".
-- Recommend "Candidate" for promising stock photos with no obvious
-  major issue; "Manual Review" for uncertain cases; and
-  "Likely Unsuitable" for clear commercial or technical drawbacks.
+- Recommend "Candidate" for promising stock photos with no obvious major issue; "Manual Review" for uncertain cases; and "Likely Unsuitable" for clear commercial or technical drawbacks.
 - Keep explanation short and specific to the visible image.
 - Do not include Markdown fences or any text outside the JSON object.

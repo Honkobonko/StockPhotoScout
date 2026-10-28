@@ -419,10 +419,7 @@ public partial class MainWindow : Window
 
             ShowReleaseNeedsReview =
                 ReleaseCheckCheck.IsChecked == true,
-
-            ShowReleaseAvailable =
-                ReleasePresentCheck.IsChecked == true,
-
+            
             ShowReleaseUnclear =
                 ReleaseUnclearCheck.IsChecked == true,
 
@@ -469,8 +466,7 @@ public partial class MainWindow : Window
         PeopleUnclearCheck.IsChecked = true;
 
         ReleaseNotRequiredCheck.IsChecked = true;
-        ReleaseCheckCheck.IsChecked = true;
-        ReleasePresentCheck.IsChecked = true;
+        ReleaseCheckCheck.IsChecked = true;        
         ReleaseUnclearCheck.IsChecked = true;
 
         MinStockBox.Text = "0";

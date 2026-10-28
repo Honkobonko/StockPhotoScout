@@ -14,8 +14,8 @@ public sealed class PhotoFilterServiceTests
         var photo = CreatePhoto(
             recommendation: "Candidate",
             peopleStatus: "None Detected",
-            releaseStatus: "Release Available",
-            stockPotential: 75);
+            releaseStatus: "Not Required (Provisional)",
+            stockPotential: 7);
 
         var options = CreateOptions();
 
@@ -97,10 +97,10 @@ public sealed class PhotoFilterServiceTests
     [Fact]
     public void Matches_ReturnsTrue_WhenStockPotentialEqualsMinimum()
     {
-        var photo = CreatePhoto(stockPotential: 60);
+        var photo = CreatePhoto(stockPotential: 6);
 
         var options = CreateOptions(
-            minimumStockPotential: "60");
+            minimumStockPotential: "6");
 
         bool result = _service.Matches(photo, options);
 
@@ -110,10 +110,10 @@ public sealed class PhotoFilterServiceTests
     [Fact]
     public void Matches_ReturnsFalse_WhenStockPotentialIsBelowMinimum()
     {
-        var photo = CreatePhoto(stockPotential: 59);
+        var photo = CreatePhoto(stockPotential: 5);
 
         var options = CreateOptions(
-            minimumStockPotential: "60");
+            minimumStockPotential: "6");
 
         bool result = _service.Matches(photo, options);
 
@@ -140,8 +140,8 @@ public sealed class PhotoFilterServiceTests
     private static PhotoItem CreatePhoto(
         string recommendation = "Candidate",
         string peopleStatus = "None Detected",
-        string releaseStatus = "Release Available",
-        int stockPotential = 75,
+        string releaseStatus = "Not Required (Provisional)",
+        int stockPotential = 7,
         bool isAnalyzed = true)
     {
         return new PhotoItem
@@ -162,9 +162,8 @@ public sealed class PhotoFilterServiceTests
         bool showNoPeople = true,
         bool showPeopleDetected = false,
         bool showPeopleUnclear = false,
-        bool showReleaseNotRequired = false,
+        bool showReleaseNotRequired = true,
         bool showReleaseNeedsReview = false,
-        bool showReleaseAvailable = true,
         bool showReleaseUnclear = false,
         string? minimumStockPotential = "0")
     {
@@ -179,7 +178,6 @@ public sealed class PhotoFilterServiceTests
             ShowPeopleUnclear = showPeopleUnclear,
             ShowReleaseNotRequired = showReleaseNotRequired,
             ShowReleaseNeedsReview = showReleaseNeedsReview,
-            ShowReleaseAvailable = showReleaseAvailable,
             ShowReleaseUnclear = showReleaseUnclear,
             MinimumStockPotential = minimumStockPotential
         };

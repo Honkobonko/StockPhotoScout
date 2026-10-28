@@ -96,7 +96,7 @@ public sealed class PhotoAnalysisService
         result.StockPotential = Math.Clamp(
             result.StockPotential,
             0,
-            100);
+            10);
 
         if (!ValidPeopleStatuses.Contains(result.PeopleStatus))
             result.PeopleStatus = "Identifiability Unclear";

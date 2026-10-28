@@ -16,7 +16,7 @@ public sealed class PhotoFilterService
             return false;
 
         if (photo.StockPotential < ReadScore(options.MinimumStockPotential))
-            return false; 
+            return false;
 
         return true;
     }
@@ -78,7 +78,6 @@ public sealed class PhotoFilterService
         bool anySelected =
             options.ShowReleaseNotRequired ||
             options.ShowReleaseNeedsReview ||
-            options.ShowReleaseAvailable ||
             options.ShowReleaseUnclear;
 
         if (!anySelected)
@@ -91,9 +90,6 @@ public sealed class PhotoFilterService
             (options.ShowReleaseNeedsReview &&
              photo.ReleaseStatus == "Release Needs Review") ||
 
-            (options.ShowReleaseAvailable &&
-             photo.ReleaseStatus == "Release Available") ||
-
             (options.ShowReleaseUnclear &&
              photo.ReleaseStatus == "Unclear");
     }
@@ -103,7 +99,7 @@ public sealed class PhotoFilterService
         if (!int.TryParse(text, out int score))
             return 0;
 
-        return Math.Clamp(score, 0, 100);
+        return Math.Clamp(score, 0, 10);
     }
 }
 
@@ -120,7 +116,6 @@ public sealed class PhotoFilterOptions
 
     public bool ShowReleaseNotRequired { get; init; }
     public bool ShowReleaseNeedsReview { get; init; }
-    public bool ShowReleaseAvailable { get; init; }
     public bool ShowReleaseUnclear { get; init; }
 
     public string? MinimumStockPotential { get; init; }

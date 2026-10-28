@@ -11,7 +11,7 @@ public sealed class PhotoAnalysisServiceTests
     {
         var client = new FakeOllamaClient("""
             {
-              "stockPotential": 85,
+              "stockPotential": 8,
               "peopleStatus": "None Detected",
               "releaseStatus": "Not Required (Provisional)",
               "recommendation": "Candidate",
@@ -23,7 +23,7 @@ public sealed class PhotoAnalysisServiceTests
 
         var result = await service.AnalyzeAsync("unused.jpg");
 
-        Assert.Equal(85, result.StockPotential);
+        Assert.Equal(8, result.StockPotential);
         Assert.Equal("None Detected", result.PeopleStatus);
         Assert.Equal("Not Required (Provisional)", result.ReleaseStatus);
         Assert.Equal("Candidate", result.Recommendation);
@@ -33,9 +33,9 @@ public sealed class PhotoAnalysisServiceTests
     }
 
     [Theory]
-    [InlineData(120, 100)]
-    [InlineData(-10, 0)]
-    [InlineData(50, 50)]
+    [InlineData(12, 10)]
+    [InlineData(-1, 0)]
+    [InlineData(5, 5)]
     public async Task AnalyzeAsync_StockPotential_IsClamped(
         int input, int expected)
     {
@@ -61,7 +61,7 @@ public sealed class PhotoAnalysisServiceTests
     {
         var client = new FakeOllamaClient("""
             {
-              "stockPotential": 60,
+              "stockPotential": 6,
               "peopleStatus": "Unknown",
               "releaseStatus": "Unknown",
               "recommendation": "Unknown",

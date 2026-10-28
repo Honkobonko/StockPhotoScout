@@ -240,13 +240,7 @@
                                       Content="Release Needs Review"
                                       IsChecked="True"
                                       Checked="Filter_Changed"
-                                      Unchecked="Filter_Changed"/>
-
-                            <CheckBox x:Name="ReleasePresentCheck"
-                                      Content="Release Available"
-                                      IsChecked="True"
-                                      Checked="Filter_Changed"
-                                      Unchecked="Filter_Changed"/>
+                                      Unchecked="Filter_Changed"/>                            
 
                             <CheckBox x:Name="ReleaseUnclearCheck"
                                       Content="Unclear"
@@ -333,7 +327,7 @@
                                         IsReadOnly="True"/>
 
                     <DataGridTextColumn Header="Stock Potential"
-                                        Binding="{Binding StockPotential, StringFormat={}{0}/100}"
+                                        Binding="{Binding StockPotential, StringFormat={}{0}/10}"
                                         Width="100"
                                         IsReadOnly="True"/>
 

@@ -3,7 +3,7 @@ namespace StockPhotoScout.Models;
 public sealed class PhotoAnalysisResult
 {
     /// <summary>
-    /// Geschätztes Potenzial des Bildes für Stock-Plattformen (0–100).
+    /// Geschätztes Potenzial des Bildes für Stock-Plattformen (0–10).
     /// </summary>
     public int StockPotential { get; set; }
 
