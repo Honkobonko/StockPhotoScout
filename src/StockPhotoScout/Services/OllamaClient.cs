@@ -1,8 +1,13 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
 using StockPhotoScout.Interfaces;
 
 namespace StockPhotoScout.Services;
@@ -21,7 +26,9 @@ public sealed class OllamaClient : IOllamaClient
 
     public OllamaClient(HttpClient httpClient)
     {
-        _httpClient = httpClient;
+        _httpClient = httpClient
+            ?? throw new ArgumentNullException(nameof(httpClient));
+
         _httpClient.BaseAddress ??= new Uri(OllamaUrl);
         _httpClient.Timeout = TimeSpan.FromMinutes(5);
     }
@@ -29,16 +36,21 @@ public sealed class OllamaClient : IOllamaClient
     public async Task<bool> IsReadyAsync(
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             using var response = await _httpClient.GetAsync(
-                "/api/tags", cancellationToken);
+                "/api/tags",
+                cancellationToken);
 
             if (!response.IsSuccessStatusCode)
                 return false;
 
-            var result = await response.Content.ReadFromJsonAsync<OllamaTagsResponse>(
-                JsonOptions, cancellationToken);
+            var result =
+                await response.Content.ReadFromJsonAsync<OllamaTagsResponse>(
+                    JsonOptions,
+                    cancellationToken);
 
             return result?.Models?.Any(model =>
                 string.Equals(
@@ -50,8 +62,10 @@ public sealed class OllamaClient : IOllamaClient
         {
             return false;
         }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (TaskCanceledException)
+            when (!cancellationToken.IsCancellationRequested)
         {
+            // Timeout statt Benutzerabbruch.
             return false;
         }
     }
@@ -60,19 +74,29 @@ public sealed class OllamaClient : IOllamaClient
         string imagePath,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (string.IsNullOrWhiteSpace(imagePath))
+        {
             throw new ArgumentException(
-                "Es wurde kein Bildpfad angegeben.", nameof(imagePath));
+                "Es wurde kein Bildpfad angegeben.",
+                nameof(imagePath));
+        }
 
         if (!File.Exists(imagePath))
+        {
             throw new FileNotFoundException(
-                "Die Bilddatei wurde nicht gefunden.", imagePath);
+                "Die Bilddatei wurde nicht gefunden.",
+                imagePath);
+        }
 
         var imageBytes = await File.ReadAllBytesAsync(
-            imagePath, cancellationToken);
+            imagePath,
+            cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         var imageBase64 = Convert.ToBase64String(imageBytes);
-
         var prompt = LoadPrompt();
 
         var request = new OllamaChatRequest
@@ -96,7 +120,10 @@ public sealed class OllamaClient : IOllamaClient
         };
 
         using var response = await _httpClient.PostAsJsonAsync(
-            "/api/chat", request, JsonOptions, cancellationToken);
+            "/api/chat",
+            request,
+            JsonOptions,
+            cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -107,16 +134,40 @@ public sealed class OllamaClient : IOllamaClient
                 $"Ollama meldet HTTP {(int)response.StatusCode}: {errorBody}");
         }
 
-        var result = await response.Content.ReadFromJsonAsync<OllamaChatResponse>(
-            JsonOptions, cancellationToken);
+        var result =
+            await response.Content.ReadFromJsonAsync<OllamaChatResponse>(
+                JsonOptions,
+                cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         var content = result?.Message?.Content;
 
         if (string.IsNullOrWhiteSpace(content))
+        {
             throw new InvalidOperationException(
                 "Ollama hat keine Analyse zurückgegeben.");
+        }
 
         return content;
+    }
+
+    private static string LoadPrompt()
+    {
+        var promptPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Prompts",
+            "StockPhotoAnalysis.txt");
+
+        if (!File.Exists(promptPath))
+        {
+            throw new FileNotFoundException(
+                "Die Prompt-Datei 'Prompts/StockPhotoAnalysis.txt' wurde " +
+                "nicht gefunden. Prüfe die Build-Einstellungen der Datei.",
+                promptPath);
+        }
+
+        return File.ReadAllText(promptPath);
     }
 
     private sealed class OllamaTagsResponse
@@ -161,22 +212,5 @@ public sealed class OllamaClient : IOllamaClient
     private sealed class OllamaResponseMessage
     {
         public string? Content { get; set; }
-    }
-
-    private static string LoadPrompt()
-    {
-        var promptPath = Path.Combine(
-            AppContext.BaseDirectory,
-            "Prompts",
-            "StockPhotoAnalysis.txt");
-
-        if (!File.Exists(promptPath))
-        {
-            throw new FileNotFoundException(
-                "The stock photo analysis prompt was not found.",
-                promptPath);
-        }
-
-        return File.ReadAllText(promptPath);
     }
 }

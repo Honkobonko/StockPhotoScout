@@ -1,4 +1,8 @@
+using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Windows.Media.Imaging;
 using StockPhotoScout.Models;
 
@@ -6,8 +10,12 @@ namespace StockPhotoScout.Services;
 
 public sealed class ImageScanner
 {
-    public List<PhotoItem> ScanFolder(string sourceFolder)
+    public List<PhotoItem> ScanFolder(
+        string sourceFolder,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var results = new List<PhotoItem>();
 
         var imageFiles = Directory
@@ -22,6 +30,8 @@ public sealed class ImageScanner
 
         foreach (string filePath in imageFiles)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             BitmapImage? thumbnail = null;
 
             // A damaged image must not stop the entire scan.
@@ -29,10 +39,16 @@ public sealed class ImageScanner
             {
                 thumbnail = LoadBitmap(filePath, 180);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception)
             {
                 // Keep the file in the results without a thumbnail.
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             results.Add(new PhotoItem
             {
@@ -50,6 +66,8 @@ public sealed class ImageScanner
                 HasPeople = false
             });
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         return results;
     }

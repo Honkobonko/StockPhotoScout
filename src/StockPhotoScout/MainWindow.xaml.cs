@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,13 +24,9 @@ public partial class MainWindow : Window
     private readonly ImageScanner _imageScanner = new();
     private readonly PhotoFilterService _photoFilterService = new();
 
-    private readonly HttpClient _httpClient = new()
-    {
-        BaseAddress = new Uri("http://localhost:11434"),
-        Timeout = TimeSpan.FromMinutes(5)
-    };
+    private readonly OllamaClient _ollamaClient =
+        new(new HttpClient());
 
-    private readonly OllamaClient _ollamaClient;
     private readonly PhotoAnalysisService _photoAnalysisService;
 
     private System.ComponentModel.ICollectionView _photosView = null!;
@@ -37,12 +34,15 @@ public partial class MainWindow : Window
     private string _sourceFolder = string.Empty;
     private string _destinationFolder = string.Empty;
 
+    private CancellationTokenSource? _operationCancellation;
+    private bool _operationRunning;
+
     public MainWindow()
     {
         InitializeComponent();
 
-        _ollamaClient = new OllamaClient(_httpClient);
-        _photoAnalysisService = new PhotoAnalysisService(_ollamaClient);
+        _photoAnalysisService =
+            new PhotoAnalysisService(_ollamaClient);
 
         _photosView = CollectionViewSource.GetDefaultView(_photos);
         _photosView.Filter = PhotoMatchesFilters;
@@ -52,8 +52,56 @@ public partial class MainWindow : Window
         UpdateCount();
     }
 
+    // --------------------------------------------------
+    // Kompakte Statusanzeige und Abbrechen
+    // --------------------------------------------------
+
+    private CancellationToken StartOperation(string status)
+    {
+        _operationCancellation = new CancellationTokenSource();
+        _operationRunning = true;
+
+        CancelButton.IsEnabled = true;
+
+        ProgressText.Text = status;
+        ProgressText.Visibility = Visibility.Visible;
+        ActivitySpinner.Visibility = Visibility.Visible;
+
+        return _operationCancellation.Token;
+    }
+
+    private void FinishOperation()
+    {
+        _operationRunning = false;
+
+        CancelButton.IsEnabled = false;
+
+        ActivitySpinner.Visibility = Visibility.Collapsed;
+        ProgressText.Visibility = Visibility.Collapsed;
+
+        _operationCancellation?.Dispose();
+        _operationCancellation = null;
+    }
+
+    private void Cancel_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_operationRunning)
+            return;
+
+        ProgressText.Text = "Cancelling...";
+
+        _operationCancellation?.Cancel();
+    }
+
+    // --------------------------------------------------
+    // Ordner auswählen
+    // --------------------------------------------------
+
     private void BrowseSource_Click(object sender, RoutedEventArgs e)
     {
+        if (_operationRunning)
+            return;
+
         var dialog = new OpenFolderDialog
         {
             Title = "Select Source Folder",
@@ -69,6 +117,9 @@ public partial class MainWindow : Window
 
     private void BrowseDestination_Click(object sender, RoutedEventArgs e)
     {
+        if (_operationRunning)
+            return;
+
         var dialog = new OpenFolderDialog
         {
             Title = "Select Destination Folder",
@@ -82,32 +133,15 @@ public partial class MainWindow : Window
         DestinationFolderTextBox.Text = _destinationFolder;
     }
 
-    private void SelectAllFiltered_Click(
-        object sender,
-        RoutedEventArgs e)
-    {
-        foreach (PhotoItem photo in _photosView)
-        {
-            photo.IsSelected = true;
-        }
-
-        UpdateCount();
-    }
-
-    private void DeselectAllFiltered_Click(
-        object sender,
-        RoutedEventArgs e)
-    {
-        foreach (PhotoItem photo in _photosView)
-        {
-            photo.IsSelected = false;
-        }
-
-        UpdateCount();
-    }
+    // --------------------------------------------------
+    // Ordner scannen
+    // --------------------------------------------------
 
     private async void Scan_Click(object sender, RoutedEventArgs e)
     {
+        if (_operationRunning)
+            return;
+
         if (string.IsNullOrWhiteSpace(_sourceFolder) ||
             !Directory.Exists(_sourceFolder))
         {
@@ -116,6 +150,7 @@ public partial class MainWindow : Window
                 "Source Folder Required",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+
             return;
         }
 
@@ -127,13 +162,15 @@ public partial class MainWindow : Window
                 "Invalid Destination",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+
             return;
         }
 
+        CancellationToken cancellationToken = StartOperation(
+            "Scanning images...");
+
         try
         {
-            CountText.Text = "Scanning images...";
-
             PreviewImage.Source = null;
             PreviewFileText.Text = "No image selected";
 
@@ -141,10 +178,18 @@ public partial class MainWindow : Window
             RefreshFilters();
 
             List<PhotoItem> scannedPhotos = await Task.Run(
-                () => _imageScanner.ScanFolder(_sourceFolder));
+                () => _imageScanner.ScanFolder(
+                    _sourceFolder,
+                    cancellationToken),
+                cancellationToken);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            ProgressText.Text = "Loading results...";
 
             foreach (PhotoItem photo in scannedPhotos)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 _photos.Add(photo);
             }
 
@@ -158,6 +203,14 @@ public partial class MainWindow : Window
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            MessageBox.Show(
+                "The scan was cancelled.",
+                "Scan Cancelled",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
         }
         catch (UnauthorizedAccessException)
         {
@@ -178,14 +231,22 @@ public partial class MainWindow : Window
         }
         finally
         {
+            FinishOperation();
             UpdateCount();
         }
     }
+
+    // --------------------------------------------------
+    // Ausgewählte Bilder analysieren
+    // --------------------------------------------------
 
     private async void AnalyzeSelected_Click(
         object sender,
         RoutedEventArgs e)
     {
+        if (_operationRunning)
+            return;
+
         List<PhotoItem> selectedPhotos = _photos
             .Where(photo => photo.IsSelected && !photo.IsAnalyzed)
             .ToList();
@@ -197,39 +258,54 @@ public partial class MainWindow : Window
                 "No Images to Analyze",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
+
             return;
         }
 
+        CancellationToken cancellationToken = StartOperation(
+            "Connecting to Ollama...");
+
         try
         {
-            CountText.Text = "Checking Ollama...";
-
-            bool isReady = await _photoAnalysisService.IsReadyAsync();
-
-            if (!isReady)
+            if (!await _photoAnalysisService.IsReadyAsync(
+                    cancellationToken))
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 MessageBox.Show(
                     "Ollama is unavailable or qwen2.5vl:7b is not installed.",
                     "Ollama Not Ready",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
+
                 return;
             }
 
             int completed = 0;
             int failed = 0;
+
             var errors = new List<string>();
 
-            foreach (PhotoItem photo in selectedPhotos)
+            for (int i = 0; i < selectedPhotos.Count; i++)
             {
-                CountText.Text =
-                    $"Analyzing {completed + failed + 1} of " +
-                    $"{selectedPhotos.Count}: {photo.FileName}";
+                cancellationToken.ThrowIfCancellationRequested();
+
+                PhotoItem photo = selectedPhotos[i];
+
+                ProgressText.Text =
+                    $"Analyzing {i + 1}/{selectedPhotos.Count}: {photo.FileName}";
 
                 try
                 {
-                    await _photoAnalysisService.AnalyzePhotoAsync(photo);
+                    await _photoAnalysisService.AnalyzePhotoAsync(
+                        photo,
+                        cancellationToken);
+
                     completed++;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -264,20 +340,63 @@ public partial class MainWindow : Window
                     ? MessageBoxImage.Warning
                     : MessageBoxImage.Information);
         }
+        catch (OperationCanceledException)
+        {
+            MessageBox.Show(
+                "The analysis was cancelled. Completed analyses have been kept.",
+                "Analysis Cancelled",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
         catch (Exception ex)
         {
             MessageBox.Show(
-                $"The analysis could not be started:" +
-                $"{Environment.NewLine}{ex.Message}",
+                $"The analysis could not be started:{Environment.NewLine}{ex.Message}",
                 "Analysis Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
         finally
         {
+            FinishOperation();
+            RefreshFilters();
             UpdateCount();
         }
     }
+
+    // --------------------------------------------------
+    // Gefilterte Bilder auswählen
+    // --------------------------------------------------
+
+    private void SelectAllFiltered_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_operationRunning)
+            return;
+
+        foreach (PhotoItem photo in _photosView)
+            photo.IsSelected = true;
+
+        UpdateCount();
+    }
+
+    private void DeselectAllFiltered_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        if (_operationRunning)
+            return;
+
+        foreach (PhotoItem photo in _photosView)
+            photo.IsSelected = false;
+
+        UpdateCount();
+    }
+
+    // --------------------------------------------------
+    // Filter
+    // --------------------------------------------------
 
     private bool PhotoMatchesFilters(object item)
     {
@@ -295,10 +414,17 @@ public partial class MainWindow : Window
             ShowPeopleDetected = PeopleDetectedCheck.IsChecked == true,
             ShowPeopleUnclear = PeopleUnclearCheck.IsChecked == true,
 
-            ShowReleaseNotRequired = ReleaseNotRequiredCheck.IsChecked == true,
-            ShowReleaseNeedsReview = ReleaseCheckCheck.IsChecked == true,
-            ShowReleaseAvailable = ReleasePresentCheck.IsChecked == true,
-            ShowReleaseUnclear = ReleaseUnclearCheck.IsChecked == true,
+            ShowReleaseNotRequired =
+                ReleaseNotRequiredCheck.IsChecked == true,
+
+            ShowReleaseNeedsReview =
+                ReleaseCheckCheck.IsChecked == true,
+
+            ShowReleaseAvailable =
+                ReleasePresentCheck.IsChecked == true,
+
+            ShowReleaseUnclear =
+                ReleaseUnclearCheck.IsChecked == true,
 
             MinimumStockPotential = MinStockBox.Text
         };
@@ -330,6 +456,9 @@ public partial class MainWindow : Window
 
     private void ResetFilters_Click(object sender, RoutedEventArgs e)
     {
+        if (_operationRunning)
+            return;
+
         RecCandidateCheck.IsChecked = true;
         RecReviewCheck.IsChecked = true;
         RecUnsuitableCheck.IsChecked = false;
@@ -348,6 +477,10 @@ public partial class MainWindow : Window
 
         RefreshFilters();
     }
+
+    // --------------------------------------------------
+    // Bildvorschau
+    // --------------------------------------------------
 
     private void ResultsGrid_SelectionChanged(
         object sender,
@@ -369,31 +502,31 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             PreviewImage.Source = null;
+
             PreviewFileText.Text =
                 $"{photo.FilePath}{Environment.NewLine}" +
                 $"Preview could not be loaded: {ex.Message}";
         }
     }
 
+    // --------------------------------------------------
+    // Ausgewählte Bilder kopieren
+    // --------------------------------------------------
+
     private void CopySelected_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_destinationFolder))
+        if (_operationRunning)
+            return;
+
+        if (string.IsNullOrWhiteSpace(_destinationFolder) ||
+            !Directory.Exists(_destinationFolder))
         {
             MessageBox.Show(
-                "Please select a destination folder first.",
+                "Please select a valid destination folder first.",
                 "Destination Folder Required",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
-            return;
-        }
 
-        if (!Directory.Exists(_destinationFolder))
-        {
-            MessageBox.Show(
-                "The selected destination folder does not exist.",
-                "Invalid Destination",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
             return;
         }
 
@@ -405,6 +538,7 @@ public partial class MainWindow : Window
                 "Source Folder Required",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+
             return;
         }
 
@@ -415,6 +549,7 @@ public partial class MainWindow : Window
                 "Invalid Destination",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+
             return;
         }
 
@@ -429,6 +564,7 @@ public partial class MainWindow : Window
                 "No Images Selected",
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
+
             return;
         }
 
@@ -465,6 +601,10 @@ public partial class MainWindow : Window
         }
     }
 
+    // --------------------------------------------------
+    // Hilfsmethoden
+    // --------------------------------------------------
+
     private static bool IsSameOrChildPath(
         string candidatePath,
         string parentPath)
@@ -480,14 +620,15 @@ public partial class MainWindow : Window
                 Path.AltDirectorySeparatorChar);
 
         if (string.Equals(
-            normalizedCandidate,
-            normalizedParent,
-            StringComparison.OrdinalIgnoreCase))
+                normalizedCandidate,
+                normalizedParent,
+                StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        string parentPrefix = normalizedParent + Path.DirectorySeparatorChar;
+        string parentPrefix =
+            normalizedParent + Path.DirectorySeparatorChar;
 
         return normalizedCandidate.StartsWith(
             parentPrefix,
@@ -523,6 +664,7 @@ public partial class MainWindow : Window
 
         int visibleCount = _photosView.Cast<object>().Count();
 
-        CountText.Text = $"{visibleCount} of {_photos.Count} images shown";
+        CountText.Text =
+            $"{visibleCount} of {_photos.Count} images shown";
     }
 }

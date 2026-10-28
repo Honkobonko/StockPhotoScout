@@ -1,6 +1,10 @@
+using System;
+using System.Collections.Generic;
 using System.Text.Json;
-using StockPhotoScout.Models;
+using System.Threading;
+using System.Threading.Tasks;
 using StockPhotoScout.Interfaces;
+using StockPhotoScout.Models;
 
 namespace StockPhotoScout.Services;
 
@@ -37,12 +41,15 @@ public sealed class PhotoAnalysisService
 
     public PhotoAnalysisService(IOllamaClient ollamaClient)
     {
-        _ollamaClient = ollamaClient;
+        _ollamaClient = ollamaClient
+            ?? throw new ArgumentNullException(nameof(ollamaClient));
     }
 
     public Task<bool> IsReadyAsync(
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         return _ollamaClient.IsReadyAsync(cancellationToken);
     }
 
@@ -50,20 +57,27 @@ public sealed class PhotoAnalysisService
         string imagePath,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var json = await _ollamaClient.AnalyzeImageAsync(
-            imagePath, cancellationToken);
+            imagePath,
+            cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         PhotoAnalysisResult? result;
 
         try
         {
             result = JsonSerializer.Deserialize<PhotoAnalysisResult>(
-                json, JsonOptions);
+                json,
+                JsonOptions);
         }
         catch (JsonException ex)
         {
             throw new InvalidOperationException(
-                "Ollama hat kein gültiges Analyse-JSON zurückgegeben.", ex);
+                "Ollama hat kein gültiges Analyse-JSON zurückgegeben.",
+                ex);
         }
 
         if (result is null)
@@ -79,7 +93,10 @@ public sealed class PhotoAnalysisService
 
     private static void ValidateResult(PhotoAnalysisResult result)
     {
-        result.StockPotential = Math.Clamp(result.StockPotential, 0, 100);
+        result.StockPotential = Math.Clamp(
+            result.StockPotential,
+            0,
+            100);
 
         if (!ValidPeopleStatuses.Contains(result.PeopleStatus))
             result.PeopleStatus = "Identifiability Unclear";
@@ -94,13 +111,18 @@ public sealed class PhotoAnalysisService
     }
 
     public async Task AnalyzePhotoAsync(
-    PhotoItem photo,
-    CancellationToken cancellationToken = default)
+        PhotoItem photo,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(photo);
-        
+
+        cancellationToken.ThrowIfCancellationRequested();
+
         var result = await AnalyzeAsync(
-            photo.FilePath, cancellationToken);
+            photo.FilePath,
+            cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         photo.StockPotential = result.StockPotential;
         photo.PeopleStatus = result.PeopleStatus;
