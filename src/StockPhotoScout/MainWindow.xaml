@@ -254,7 +254,7 @@
 
                     <WrapPanel>
                         <StackPanel Margin="4,0,20,4">
-                            <TextBlock Text="Minimum Stock Potential (0–100)"/>
+                            <TextBlock Text="Minimum Stock Potential (0–10)"/>
 
                             <TextBox x:Name="MinStockBox"
                                      Text="0"
