@@ -549,7 +549,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        List<PhotoItem> selectedPhotos = _photos
+        List<PhotoItem> selectedPhotos = _photosView
+            .Cast<PhotoItem>()
             .Where(photo => photo.IsSelected)
             .ToList();
 
